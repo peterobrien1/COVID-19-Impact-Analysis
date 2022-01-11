@@ -1,0 +1,169 @@
+---
+title: "Lyme EDA"
+author: "Peter O'Brien"
+date: "11/29/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+# Load cleaned data
+# Housekeeping # 
+rm(list = ls())
+options(scipen = 999)
+here::i_am("SCRIPTS/Analysis/LYME_EDA.Rmd") # Establish relative wd
+library(tidyverse)
+library(lubridate)
+library(zoo)
+library(stargazer)
+library(scales)
+library(ggthemes)
+library(here)
+library(beepr)
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+# Load data
+df_lyme_type <- read_csv(here("DATA/MERGED_DATA/lyme_cleaned.csv"))
+```
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# Plot lyme data 
+
+# Plot by census region
+
+df_lyme_type %>% 
+  group_by(census_region, year) %>% 
+  summarise(total_cases = sum(Cases)) %>% 
+  ggplot(aes(year, 
+             total_cases, 
+             col = census_region)) + 
+  geom_point() + 
+  geom_line() + 
+  labs(y = "Lyme Cases (Reported)", x = "Year", col = "Census Region") +
+  theme_minimal() + 
+  ggtitle("Lyme Disease Cases by Census Region", subtitle = "2000 - 2018") +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000,2018,2)) 
+
+# Plot Northeast states only 
+
+df_lyme_type %>% 
+  filter(census_region == "New England" | census_region == "Middle Atlantic") %>% 
+  group_by(State, year) %>% 
+  summarise(total_cases = sum(Cases)) %>% 
+  ggplot(aes(year, 
+             total_cases, 
+             col = State)) + 
+  geom_point() + 
+  geom_line() + 
+  labs(y = "Lyme Cases (Reported)", x = "Year", col = "State") +
+  theme_minimal() + 
+  ggtitle("Lyme Disease Cases in the Northeast", subtitle = "2000 - 2018") +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000,2018,2)) 
+
+
+# Plot by recreation county
+df_lyme_type %>% 
+  group_by(recreation, year) %>% 
+  summarise(total_cases = sum(Cases)) %>% 
+  ggplot(aes(year, 
+             total_cases, 
+             col = recreation)) + 
+  geom_point() + 
+  geom_line() + 
+  labs(y = "Lyme Cases (Reported)", x = "Year", col = "Recreation Cnty") +
+  theme_minimal() + 
+  ggtitle("Lyme Disease Cases in Recreation Counties", subtitle = "2000 - 2018") +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma)  +
+  scale_x_continuous(breaks = seq(2000,2018,2)) 
+
+
+# Plot differences in rec vs. nonrec
+lyme_grouped <- df_lyme_type %>% 
+  group_by(recreation, year) %>% 
+  summarise(total_cases = sum(Cases)) %>% 
+  group_by(year) %>% 
+  summarise(case_difference = total_cases[recreation == "Non-Recreation"] - total_cases[recreation == "Recreation"])
+
+
+
+lyme_grouped %>% 
+  ggplot(aes(year, 
+             case_difference)) + 
+  geom_line(size = 1.01) + 
+  labs(y = "Difference in Cases", x = "Year") +
+  theme_minimal() + 
+  ggtitle("Difference in Lyme Disease Cases (NonRec vs. Recreation Counties)", subtitle = "2000 - 2018") +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000,2018,2)) 
+
+
+
+
+
+
+
+# Now look per capita # 
+# Plot by recreation county
+df_lyme_type %>% 
+  group_by(recreation, year) %>% 
+  summarise(total_cases = sum(Cases),
+            total_pop = sum(population)) %>% 
+  mutate(total_per_100k = (total_cases / total_pop) * 100000) %>% 
+  ggplot(aes(year, 
+             total_per_100k, 
+             col = recreation)) + 
+  geom_point() + 
+  geom_line() + 
+  labs(y = "Lyme Cases per 100k Residents (Reported)", x = "Year", col = "Recreation Cnty") +
+  theme_minimal() + 
+  ggtitle("Lyme Disease Cases in Recreation Counties", subtitle = "2000 - 2018") +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma)  +
+  scale_x_continuous(breaks = seq(2000,2018,2)) 
+
+
+# Plot differences in rec vs. nonrec
+lyme_grouped2 <- df_lyme_type %>% 
+  group_by(recreation, year) %>% 
+  summarise(total_cases = sum(Cases),
+            total_pop = sum(population)) %>% 
+  mutate(total_per_100k = (total_cases / total_pop) * 100000) %>%
+  group_by(year) %>% 
+  summarise(case_difference = total_per_100k[recreation == "Recreation"] - total_per_100k[recreation == "Non-Recreation"]) # NOTE the differe here
+
+
+
+lyme_grouped2 %>% 
+  ggplot(aes(year, 
+             case_difference)) + 
+  geom_line(size = 1.01) + 
+  labs(y = "Difference in Cases", x = "Year") +
+  theme_minimal() + 
+  ggtitle("Difference in Lyme Disease Cases per 100k (Rec vs. Nonrec Counties)", subtitle = "2000 - 2018") +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000,2018,2)) 
+
+```

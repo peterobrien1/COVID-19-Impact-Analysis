@@ -1,0 +1,461 @@
+---
+title: "COVID-19 EDA"
+author: "Peter O'Brien"
+date: "10/8/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+# Load cleaned data
+# Housekeeping # 
+rm(list = ls())
+options(scipen = 999)
+here::i_am("SCRIPTS/Analysis/COVID_EDA_V1.Rmd") # Establish relative wd
+library(tidyverse)
+library(lubridate)
+library(zoo)
+library(stargazer)
+library(scales)
+library(ggthemes)
+library(here)
+library(beepr)
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+df_covid_full <- read_csv(here("DATA/MERGED_DATA/us_counties_data_full_V2.csv"))
+df_covid_full$date <- zoo::as.yearmon(paste(df_covid_full$year, 
+                                                     df_covid_full$month_num), "%Y %m") # `zoo` function call to recreate date object
+regression_data <- read_csv(here("DATA/MERGED_DATA/covid_regression_data_final.csv"))
+
+```
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+### DEFINE PLOTTING FUNCTION HERE ###
+covid_plot_function <- function(df, var, my_title, col_title){
+  var <- ensym(var)
+  df %>%
+    group_by(!!var, date) %>%
+    summarize(total_population = sum(population),
+              total_cases = sum(month_new_case_total)) %>%
+    mutate(total_cases_per_100k = (total_cases / total_population) * 100000) %>%
+    ggplot(aes(x = as.Date(date),
+               y = total_cases_per_100k,
+               col = !!var)) +
+             geom_line() +
+             scale_x_date(date_breaks = "4 month",
+                          labels = date_format("%b-%Y")) +
+             labs(y = "New Cases Per 100k Residents", x = "Date", col = paste0(col_title)) +
+             theme_minimal() +
+             ggtitle(paste0(my_title), subtitle = "January 2020 - November 2021") +
+             theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5)) +
+             scale_y_continuous(labels = comma) 
+           
+}
+```
+
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# A: infection rates whole US 
+plot_A <- df_covid_full %>% 
+  group_by(date) %>% 
+  summarize(total_population = sum(population),
+            total_cases = sum(month_new_case_total)) %>% 
+  mutate(total_cases_per_100k = (total_cases / total_population) * 100000) %>% 
+  ggplot(aes(x = as.Date(date), 
+             y = total_cases_per_100k)) +
+  geom_line() +
+  scale_x_date(date_breaks = "4 month",
+               labels = date_format("%b-%Y")) + 
+  labs(y = "New Cases Per 100k Residents", x = "Date", col = "Census Region") +
+  theme_minimal() + 
+  ggtitle("COVID-19 Monthly Infection Rate in U.S.", subtitle = "January 2020 - November 2021") +
+  theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma) 
+
+plot_A
+
+
+```
+
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# B: infection rates by census regions 
+
+plot_B <- df_covid_full %>% 
+ filter(census_region != "NA") %>% 
+  covid_plot_function(var = 'census_region', 
+                    my_title = "COVID-19 Monthly Infection Rate in US Census Regions", 
+                    col_title = "Census Region")
+plot_B
+
+
+
+```
+
+
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# C. By rec & non-rec (whole U.S. )
+plot_C <- covid_plot_function(df = df_covid_full, var = 'recreation', 
+                    my_title = "COVID-19 Monthly Infection Rate in Recreation Counties", 
+                    col_title = "Cnty Type")
+plot_C
+
+```
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# D. Rec and Non Rec Counties (Census Regions regions)
+#- maybe 2 charts Rec and Non-Rec with 9 lines each - hard to imagine 18 lines would work on a single graph 
+# but you could color all rec and non-rec the same color to simplify visual - general contrast between these 2 groups
+
+
+plot_D1 <- df_covid_full %>% 
+  filter(recreation == "Recreation") %>% 
+  group_by(census_region, date) %>% 
+  summarize(total_population = sum(population),
+            total_cases = sum(month_new_case_total)) %>% 
+  mutate(total_cases_per_100k = (total_cases / total_population) * 100000) %>% 
+  filter(census_region != "NA") %>% 
+  ggplot(aes(x = as.Date(date), 
+             y = total_cases_per_100k, 
+             col = census_region)) +
+  geom_line() +
+  scale_x_date(date_breaks = "4 month",
+               labels = date_format("%b-%Y")) + 
+  labs(y = "New Cases Per 100k Residents", x = "Date", col = "Census Region") +
+  theme_minimal() + 
+  ggtitle("COVID-19 Monthly Infection Rate in US Recreation Counties", subtitle = "January 2020 - November 2021") +
+  theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma) 
+plot_D1
+
+
+plot_D2 <- df_covid_full %>% 
+  filter(recreation == "Non-Recreation") %>% 
+  group_by(census_region, date) %>% 
+  summarize(total_population = sum(population),
+            total_cases = sum(month_new_case_total)) %>% 
+  mutate(total_cases_per_100k = (total_cases / total_population) * 100000) %>% 
+  filter(census_region != "NA") %>% 
+  ggplot(aes(x = as.Date(date), 
+             y = total_cases_per_100k, 
+             col = census_region)) +
+  geom_line() +
+  scale_x_date(date_breaks = "4 month",
+               labels = date_format("%b-%Y")) + 
+  labs(y = "New Cases Per 100k Residents", x = "Date", col = "Census Region") +
+  theme_minimal() + 
+  ggtitle("COVID-19 Monthly Infection Rate in US Non-Rec Counties", subtitle = "January 2020 - November 2021") +
+  theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma) 
+
+plot_D2
+
+```
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# E. Rural / Urban (Whole US)
+plot_E <- covid_plot_function(df = df_covid_full, var = 'county_type', 
+                    my_title = "COVID-19 Monthly Infection Rate in Metro vs. Nonmetro US Counties", 
+                    col_title = "County Type")
+
+plot_E
+
+
+```
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# F. Rural / Urban (Census Regions)
+plot_F1 <- df_covid_full %>% 
+  filter(county_type == "Metro") %>% 
+  group_by(census_region, date) %>% 
+  summarize(total_population = sum(population),
+            total_cases = sum(month_new_case_total)) %>% 
+  mutate(total_cases_per_100k = (total_cases / total_population) * 100000) %>% 
+  filter(census_region != "NA") %>% 
+  ggplot(aes(x = as.Date(date), 
+             y = total_cases_per_100k, 
+             col = census_region)) +
+  geom_line() +
+  scale_x_date(date_breaks = "4 month",
+               labels = date_format("%b-%Y")) + 
+  labs(y = "New Cases Per 100k Residents", x = "Date", col = "Census Region") +
+  theme_minimal() + 
+  ggtitle("COVID-19 Monthly Infection Rate in US Metro Counties", subtitle = "January 2020 - November 2021") +
+  theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma) 
+plot_F1
+
+
+plot_F2 <- df_covid_full %>% 
+  filter(county_type == "Nonmetro") %>% 
+  group_by(census_region, date) %>% 
+  summarize(total_population = sum(population),
+            total_cases = sum(month_new_case_total)) %>% 
+  mutate(total_cases_per_100k = (total_cases / total_population) * 100000) %>% 
+  filter(census_region != "NA") %>% 
+  ggplot(aes(x = as.Date(date), 
+             y = total_cases_per_100k, 
+             col = census_region)) +
+  geom_line() +
+  scale_x_date(date_breaks = "4 month",
+               labels = date_format("%b-%Y")) + 
+  labs(y = "New Cases Per 100k Residents", x = "Date", col = "Census Region") +
+  theme_minimal() + 
+  ggtitle("COVID-19 Monthly Infection Rate in US Nonmetro Counties", subtitle = "January 2020 - November 2021") +
+  theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma) 
+
+plot_F2
+
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# G. Rural / Urban / Rec / Non-Rec (Whole US)
+plot_G <- covid_plot_function(df = df_covid_full, var = 'designation', 
+                    my_title = "COVID-19 Monthly Infection Rate US Counties", 
+                    col_title = "County Type")
+
+plot_G
+
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# H. Rural / Urban / Rec / Non-Rec (Census Regions)
+# Only looking at New England for now
+
+plot_H1 <- df_covid_full %>% 
+  filter(census_region == "New England") %>% 
+  group_by(designation, date) %>% 
+  summarize(total_population = sum(population),
+            total_cases = sum(month_new_case_total)) %>% 
+  mutate(total_cases_per_100k = (total_cases / total_population) * 100000) %>% 
+  ggplot(aes(x = as.Date(date), 
+             y = total_cases_per_100k, 
+             col = designation)) +
+  geom_line() +
+  scale_x_date(date_breaks = "4 month",
+               labels = date_format("%b-%Y")) + 
+  labs(y = "New Cases Per 100k Residents", x = "Date", col = "County Type") +
+  theme_minimal() + 
+  ggtitle("COVID-19 Monthly Infection Rate in New England Counties", subtitle = "January 2020 - November 2021") +
+  theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma) 
+plot_H1
+
+
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# Metro vs. Non Metro infection rate gap
+plotI <- df_covid_full %>% 
+  group_by(county_type, date) %>% 
+  summarise(total_population = sum(population),
+            total_cases = sum(month_new_case_total)) %>% 
+  mutate(total_cases_per_100k = (total_cases / total_population) * 100000) %>% 
+  group_by(date) %>% 
+  mutate(case_difference = total_cases_per_100k[county_type == "Metro"] - total_cases_per_100k[county_type == "Nonmetro"]) %>% 
+  ggplot(aes(as.Date(date), 
+             case_difference)) + 
+  geom_line(size = 1.01) + 
+  labs(y = "Difference in Cases", x = "Date") +
+  theme_minimal() + 
+  ggtitle("Difference in Infection Rate (Metro vs. Nonmetro)", subtitle = "Jan 2020 - November 2021") +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma) 
+plotI
+
+
+# Rec vs. nonrec
+plotJ <- df_covid_full %>% 
+  group_by(recreation, date) %>% 
+  summarise(total_population = sum(population),
+            total_cases = sum(month_new_case_total)) %>% 
+  mutate(total_cases_per_100k = (total_cases / total_population) * 100000) %>% 
+  group_by(date) %>% 
+  mutate(case_difference = total_cases_per_100k[recreation == "Recreation"] - total_cases_per_100k[recreation == "Non-Recreation"]) %>% 
+  ggplot(aes(as.Date(date), 
+             case_difference)) + 
+  geom_line(size = 1.01) + 
+  labs(y = "Difference in Cases", x = "Date") +
+  theme_minimal() + 
+  ggtitle("Difference in Infection Rate (Recreation vs. Non-Recreation Cnties)", subtitle = "Jan 2020 - November 2021") +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma) 
+plotJ
+
+# combine information from above plots
+plotK <- df_covid_full %>% 
+  group_by(designation, date) %>% 
+  summarise(total_population = sum(population),
+            total_cases = sum(month_new_case_total)) %>% 
+  mutate(total_cases_per_100k = (total_cases / total_population) * 100000) %>% 
+  group_by(date) %>% 
+  mutate(case_difference_metro = total_cases_per_100k[designation == "Metro recreation"] - total_cases_per_100k[designation == "Metro non-recreation"],
+         case_difference_nonmetro = total_cases_per_100k[designation == "Nonmetro recreation" ] - total_cases_per_100k[designation == "Nonmetro non-Recreation"]) %>% 
+  ggplot(aes(as.Date(date))) + 
+  geom_line(size = 1.01, aes(y = case_difference_metro, colour = "Metro")) + 
+  geom_line(size = 1.01, aes(y = case_difference_nonmetro, colour = "Nonmetro")) + 
+  labs(y = "Difference in Case Rate", x = "Date", col = "Cnty Type") +
+  theme_minimal() + 
+  ggtitle("Difference in Infection Rate (Recreation vs. Non-Recreation Cnties)", subtitle = "Jan 2020 - November 2021") +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma) 
+plotK
+
+  
+
+```
+
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+# Regression data prep
+length(unique(filter(regression_data, census_region == "NA")))
+regression_data <- regression_data %>% 
+  filter(census_region != "NA") 
+
+# Plot dependent variable (log & level)
+hist(regression_data$cumulative_cases_per_1k)
+hist(regression_data$ln_cum_cases_per_cap)
+
+# Plot pop density vs. cumulative cases -- Looks weird but roughly consistent with pop denstiy charts on Our World in Data
+regression_data %>% 
+  ggplot(aes(x = pop_density, y = cumulative_cases_per_1k)) +
+  geom_point(size = 1.01) +
+  labs(y = "Total Cases (per 100k)", x = "Population Density (people per sq mile)") +
+  theme_minimal() + 
+  ggtitle("Cumulative Covid Cases per 100k vs. Population Density", subtitle = "U.S. Counties (Jan 2020 - November 2021)") +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) + 
+  scale_y_continuous(labels = comma) 
+
+
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+# Regresssions (preliminary)
+
+# Level models
+
+# Cnty group identifier only, level
+model1_level <- lm(cumulative_cases_per_1k ~ census_region + county_type + recreation + doses_per_100k + pop_density, 
+                   data = regression_data)
+summary(model1_level)
+
+
+# Cnty group identifier plus sociodemographics, level
+model2_level <- lm(cumulative_cases_per_1k ~ census_region + county_type + recreation + median_inc + college_degree_more + ages_18_64 + p_vacant + proportion_white + doses_per_100k + pop_density, 
+                   data = regression_data)
+summary(model2_level)
+
+
+
+# Cnty group identifier plus sociodemographics plus interactions, level
+model3_level <- lm(cumulative_cases_per_1k ~ recreation + county_type +  recreation:county_type + census_region + median_inc + college_degree_more + ages_18_64 + p_vacant + proportion_white + doses_per_100k + pop_density, 
+                   data = regression_data)
+summary(model3_level)
+
+# Same as above, but add proportion of county land area that is conserved (PPROT)
+# NOTE: Drops 23 cnties from Alaska & Hawaii
+model4_level <- lm(cumulative_cases_per_1k ~ recreation + county_type +  recreation:county_type + PPROT + census_region + median_inc + college_degree_more + ages_18_64 + p_vacant + proportion_white + doses_per_100k + pop_density, 
+                   data = regression_data)
+
+# Add interaction between region and rec dummy
+model5_level <- lm(cumulative_cases_per_1k ~ recreation + county_type +  recreation:county_type + recreation:census_region + PPROT + census_region + median_inc + college_degree_more + ages_18_64 + p_vacant + proportion_white + doses_per_100k + pop_density, 
+                   data = regression_data)
+summary(model5_level) # NOTE: no interaction effect observed & no real explanatory power gained with this specificiation
+
+stargazer(model1_level, model2_level, model3_level, model4_level,
+          style = "qje",
+          title = "Impact of Cnty Typology & Demographics on COVID-19 Infection Rates",
+          type = "text",
+          column.sep.width = "-10pt",
+          header = FALSE,
+          omit = "census_region",
+          omit.stat = c("f", "ser"))
+
+
+# This generates uncompiled latex code
+# stargazer(model1_level, model2_level, model3_level, model4_level,
+#           style = "qje",
+#           title = "Impact of Cnty Typology and Demographics on COVID-19 Infection Rates",
+#           type = "latex",
+#           column.sep.width = "-10pt",
+#           header = FALSE,
+#           omit = "census_region",
+#           omit.stat = c("f", "ser"))
+
+
+
+
+# Log models
+
+# Cnty group identifier only, log
+model1_log <- lm(ln_cum_cases_per_cap ~ census_region + county_type + recreation,
+                 data = regression_data)
+summary(model1_log)
+
+
+# Cnty group identifier plus sociodemographics, log
+model2_log <- lm(ln_cum_cases_per_cap ~ census_region + county_type + recreation + median_inc + college_degree_more + ages_18_64 + p_vacant + proportion_white, 
+                 data = regression_data)
+summary(model2_log)
+
+# Cnty group identifier plus sociodemographics plus interactions, log
+model3_log <- lm(ln_cum_cases_per_cap ~ recreation + county_type + recreation:county_type + census_region + median_inc + college_degree_more + ages_18_64 + p_vacant + proportion_white, 
+                 data = regression_data)
+summary(model3_log)
+# 
+
+
+# stargazer(model2_level, model2_log,
+#           style = "qje",
+#           title = "Impact of Cnty Typology & Demographics on COVID-19 Infection Rates",
+#           type = "text",
+#           column.sep.width = "-8pt",
+#           header = FALSE,
+#           column.labels = c("Cases", "log(Cases)"),
+#           dep.var.captions = "",
+#           omit = "census_region")
+
+
+
+# Next steps: labor market impact as a fn of cases, cnty type, demographics....
+beep(2) # Script is done
+```
+
+
+
+
+
+
+
